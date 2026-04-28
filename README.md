@@ -53,8 +53,9 @@ just install
 
 **2. Copy and fill in environment files:**
 ```bash
-cp frontend/.env.example frontend/.env
-cp backend/.env.example backend/.env
+make env_copy
+# or
+just env_copy
 ```
 
 **3. Set up the model conda environment (first time only):**

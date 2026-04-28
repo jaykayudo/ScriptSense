@@ -23,3 +23,7 @@ clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -name "*.pyc" -delete
 	cd frontend && rm -rf dist
+
+env_copy:
+	cp frontend/.env.example frontend/.env
+	cp backend/.env.example backend/.env
