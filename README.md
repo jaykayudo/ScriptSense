@@ -102,7 +102,7 @@ Press `Ctrl+C` to stop all services cleanly.
 
 ## Model Setup
 
-The YOLO weights (`line_detector_best.pt`) must be placed in `model/saved_models/` manually — they are not committed to the repository.
+The YOLO weights (`line_detector_best.pt`) is placed in `model/saved_models/`.
 
 The TrOCR model is downloaded automatically on first startup via `scripts/save_model_locally.py` and saved to `model/saved_models/trocr/`. Subsequent startups load from that local directory — no internet required.
 
