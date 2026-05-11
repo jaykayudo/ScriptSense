@@ -1,13 +1,18 @@
 from pathlib import Path
 
+from loguru import logger
+
 
 def create_txt(pages: list[str], output_path: Path) -> Path:
+    logger.debug("Writing TXT | pages={} path={}", len(pages), output_path.name)
     separator = "\n" + "=" * 60 + "\n\n"
     output_path.write_text(separator.join(pages), encoding="utf-8")
+    logger.debug("TXT written | size={} bytes", output_path.stat().st_size)
     return output_path
 
 
 def create_pdf(pages: list[str], output_path: Path) -> Path:
+    logger.debug("Writing PDF | pages={} path={}", len(pages), output_path.name)
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import cm
@@ -39,10 +44,12 @@ def create_pdf(pages: list[str], output_path: Path) -> Path:
             story.append(Paragraph(line.strip() or "&nbsp;", body))
 
     doc.build(story)
+    logger.debug("PDF written | size={} bytes", output_path.stat().st_size)
     return output_path
 
 
 def create_docx(pages: list[str], output_path: Path) -> Path:
+    logger.debug("Writing DOCX | pages={} path={}", len(pages), output_path.name)
     from docx import Document
     from docx.enum.text import WD_BREAK
     from docx.shared import Cm, Pt
@@ -63,11 +70,13 @@ def create_docx(pages: list[str], output_path: Path) -> Path:
                 run.font.size = Pt(11)
 
     document.save(str(output_path))
+    logger.debug("DOCX written | size={} bytes", output_path.stat().st_size)
     return output_path
 
 
 def create_file(pages: list[str], output_format: str, output_path: Path) -> Path:
     fmt = output_format.lower().lstrip(".")
+    logger.info("Creating output file | format={} pages={} path={}", fmt.upper(), len(pages), output_path.name)
     if fmt == "txt":
         return create_txt(pages, output_path)
     if fmt == "pdf":

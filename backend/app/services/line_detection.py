@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import cv2
 import numpy as np
+from loguru import logger
 from PIL import Image as PILImage
 from ultralytics import YOLO
 
@@ -13,7 +14,9 @@ _yolo_model: YOLO | None = None
 def _get_model() -> YOLO:
     global _yolo_model
     if _yolo_model is None:
+        logger.info("Loading YOLO model | path={}", SETTINGS.yolo_model_path)
         _yolo_model = YOLO(SETTINGS.yolo_model_path)
+        logger.info("YOLO model loaded")
     return _yolo_model
 
 
@@ -35,14 +38,17 @@ def get_crops_for_image(image_source: str | np.ndarray) -> list[PILImage.Image]:
     else:
         img = image_source
 
+    logger.debug("YOLO predict | input_shape={}", img.shape)
     yolo = _get_model()
     results = yolo.predict(source=img, conf=0.25, verbose=False)
 
     boxes = results[0].boxes.xyxy.cpu().numpy()
     if len(boxes) == 0:
+        logger.warning("No lines detected — falling back to full image as single crop")
         return [PILImage.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))]
 
     boxes = boxes[boxes[:, 1].argsort()]
+    logger.debug("Lines detected | count={}", len(boxes))
     crops = []
     for x1, y1, x2, y2 in boxes:
         crop = img[int(y1):int(y2), int(x1):int(x2)]

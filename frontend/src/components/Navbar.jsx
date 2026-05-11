@@ -33,9 +33,6 @@ export default function Navbar({ theme, toggleTheme }) {
 
         <div className="flex items-center gap-3">
           <ThemeToggle theme={theme} toggle={toggleTheme} />
-          <Link to="/app" className="hidden md:inline-flex btn-primary text-sm py-2 px-4">
-            Try It Now
-          </Link>
 
           {/* Mobile hamburger */}
           <button

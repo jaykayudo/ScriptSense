@@ -2,6 +2,7 @@ from PIL import Image as PILImage
 import numpy as np
 import cv2
 import piexif
+from loguru import logger
 
 
 def order_points(pts):
@@ -36,6 +37,7 @@ def load_with_exif_rotation(path):
     Returns:
         np.ndarray: BGR image array (OpenCV's native format), correctly rotated.
     """
+    logger.debug("Loading image | path={}", path)
     pil_img = PILImage.open(path)
     # Try to read the orientation tag from EXIF data
     try:
@@ -46,7 +48,11 @@ def load_with_exif_rotation(path):
     # EXIF orientation codes and their corresponding rotation angles
     rotation_map = {3: 180, 6: -90, 8: 90}
     if orientation in rotation_map:
-        pil_img = pil_img.rotate(rotation_map[orientation], expand=True)
+        angle = rotation_map[orientation]
+        logger.debug("Applying EXIF rotation | angle={}°", angle)
+        pil_img = pil_img.rotate(angle, expand=True)
+    else:
+        logger.debug("No EXIF rotation needed | orientation={}", orientation)
     # Convert from Pillow (RGB) to OpenCV (BGR) format
     return cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
 
@@ -93,7 +99,7 @@ def perspective_correct(image):
             break
 
     if doc_contour is None:
-        print("No document contour found — skipping perspective correction")
+        logger.warning("No document contour found — skipping perspective correction")
         return image  # Return the image unchanged
 
     # Order the 4 corners consistently (TL, TR, BR, BL)
@@ -117,6 +123,7 @@ def perspective_correct(image):
     ], dtype="float32")
 
     # Compute and apply the perspective transform
+    logger.debug("Perspective correction applied | output={}x{}", maxW, maxH)
     M = cv2.getPerspectiveTransform(pts, dst)
     warped = cv2.warpPerspective(orig, M, (maxW, maxH))
     return warped
@@ -145,6 +152,7 @@ def process_document(image_path: str) -> np.ndarray:
     Returns:
         np.ndarray: A cleaned, binarized (black & white) image ready for OCR.
     """
+    logger.debug("process_document start | path={}", image_path)
     # Fix rotation and perspective
     image = load_with_exif_rotation(image_path)
     image = perspective_correct(image)
@@ -175,4 +183,5 @@ def process_document(image_path: str) -> np.ndarray:
     kernel = np.ones((2, 2), np.uint8)
     clean = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
 
+    logger.debug("process_document complete | output_shape={}", clean.shape)
     return clean

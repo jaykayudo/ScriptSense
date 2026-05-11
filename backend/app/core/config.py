@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # Each conversion job gets its own sub-directory inside this path
     temp_dir: str = "/tmp/scriptsense"
 
+    # ── Logging ───────────────────────────────────────────────────────────────
+    # TRACE | DEBUG | INFO | WARNING | ERROR | CRITICAL  (case-insensitive)
+    log_level: str = "INFO"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

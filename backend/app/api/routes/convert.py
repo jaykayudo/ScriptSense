@@ -8,6 +8,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
+from loguru import logger
 
 from app.core.config import Settings, get_settings
 from app.core.dependencies import validate_images
@@ -32,12 +33,19 @@ async def _run_job(
     job_dir: Path,
 ) -> None:
     queue: asyncio.Queue = _jobs[job_id]["queue"]
+    log = logger.bind(job_id=job_id)
     try:
         cls = MultiPageConversion if doc_structure == "multi" else SingleDocConversion
-        output_files = await cls(images_data, output_format, job_dir).run(queue)
+        log.info(
+            "Pipeline started | mode={} images={} format={}",
+            cls.__name__, len(images_data), output_format,
+        )
+        output_files = await cls(images_data, output_format, job_dir, job_id).run(queue)
 
+        filenames = [f.name for f in output_files]
         _jobs[job_id]["result_dir"] = job_dir
-        _jobs[job_id]["files"] = [f.name for f in output_files]
+        _jobs[job_id]["files"] = filenames
+        log.info("Pipeline complete | files={}", filenames)
 
         await queue.put({
             "step": "done",
@@ -50,6 +58,7 @@ async def _run_job(
             ],
         })
     except Exception as exc:
+        log.exception("Pipeline failed | error={}", exc)
         _jobs[job_id]["error"] = str(exc)
         await queue.put({
             "step": "error",
@@ -101,7 +110,12 @@ async def start_conversion(
         "error": None,
     }
 
-    # Start immediately in the current event loop
+    logger.info(
+        "Job created | job_id={} images={} doc_structure={} output_format={}",
+        job_id, len(images_data), doc_structure, output_format,
+    )
+    logger.debug("Job temp dir | path={}", job_dir)
+
     asyncio.create_task(
         _run_job(job_id, images_data, doc_structure, output_format, job_dir)
     )
@@ -118,8 +132,10 @@ async def stream_progress(job_id: str) -> StreamingResponse:
     or status="error" with a "message" field.
     """
     if job_id not in _jobs:
+        logger.warning("SSE requested for unknown job | job_id={}", job_id)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
 
+    logger.debug("SSE client connected | job_id={}", job_id)
     queue: asyncio.Queue = _jobs[job_id]["queue"]
 
     async def event_stream():
@@ -128,16 +144,22 @@ async def stream_progress(job_id: str) -> StreamingResponse:
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=600.0)
                 except asyncio.TimeoutError:
+                    logger.warning("SSE job timed out | job_id={}", job_id)
                     yield (
                         'data: {"step":"error","label":"Timed out",'
                         '"percentage":0,"status":"error","message":"job timed out"}\n\n'
                     )
                     break
+                logger.debug(
+                    "SSE event | job_id={} step={} pct={}",
+                    job_id, event.get("step"), event.get("percentage"),
+                )
                 yield f"data: {json.dumps(event)}\n\n"
                 if event.get("status") in ("done", "error"):
+                    logger.debug("SSE stream closing | job_id={} status={}", job_id, event.get("status"))
                     break
         except asyncio.CancelledError:
-            pass  # client disconnected
+            logger.debug("SSE client disconnected | job_id={}", job_id)
 
     return StreamingResponse(
         event_stream(),
@@ -162,10 +184,10 @@ async def download_result(job_id: str, filename: str) -> FileResponse:
             status_code=status.HTTP_404_NOT_FOUND, detail="Result not ready yet"
         )
 
-    # Guard against path traversal
     safe_name = Path(filename).name
     file_path = result_dir / safe_name
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
+    logger.info("File download | job_id={} filename={}", job_id, safe_name)
     return FileResponse(file_path, filename=safe_name)
